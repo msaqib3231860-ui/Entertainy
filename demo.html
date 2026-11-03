@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entertainy — Sandbox Demo</title>
+<style>body{font-family:system-ui,Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{font-size:28px}button{font-size:16px;padding:10px 18px;margin:8px 0;cursor:pointer}a{color:#6d28d9}.box{border:1px solid #ddd;border-radius:8px;padding:16px;margin:16px 0}#status{white-space:pre-wrap;background:#f6f6f6;padding:12px;border-radius:6px}</style>
+</head>
+<body>
+<h1>Entertainy — Sandbox Demo</h1>
+<p>This is the Entertainy website for TikTok Sandbox testing: <strong>https://msaqib3231860-ui.github.io/Entertainy/</strong></p>
+<p>Entertainy uploads the account owner's own videos to their own TikTok inbox as drafts. It does not publish automatically. The owner reviews and posts each draft themselves in the TikTok app.</p>
+
+<div class="box">
+<h2>Step 1 — Login with TikTok (Login Kit)</h2>
+<p>Scopes requested: <strong>user.info.basic</strong> and <strong>video.upload</strong></p>
+<button id="loginBtn">Login with TikTok</button>
+<p id="loginStatus"></p>
+</div>
+
+<div class="box">
+<h2>Step 2 — Upload to TikTok inbox (Content Posting API, Upload)</h2>
+<p>Choose a video file from your device. This uses the inbox/draft upload flow, not Direct Post publishing.</p>
+<input type="file" id="videoFile" accept="video/mp4,video/quicktime">
+<p id="fileInfo"></p>
+<p>For the Sandbox upload API call, paste a Sandbox user access token generated in the TikTok Developer Portal (the token is used only in your browser for this test, it is not stored on this site):</p>
+<input type="text" id="tokenInput" placeholder="Paste Sandbox access token here" style="width:100%;padding:8px">
+<br>
+<button id="uploadBtn">Upload to TikTok inbox (Sandbox)</button>
+<p id="uploadStatus"></p>
+</div>
+
+<div class="box">
+<h2>Status</h2>
+<pre id="status">Ready. Click Login with TikTok to start.</pre>
+</div>
+
+<p><a href="index.html">Entertainy home</a> &nbsp;|&nbsp; <a href="terms.html">Terms of Service</a> &nbsp;|&nbsp; <a href="privacy.html">Privacy Policy</a></p>
+
+<script>
+const CLIENT_KEY = "sbawa7niff3urxkm9j";
+const REDIRECT_URI = "https://msaqib3231860-ui.github.io/Entertainy/demo.html";
+const SCOPES = "user.info.basic,video.upload";
+const statusEl = document.getElementById("status");
+function log(msg){ statusEl.textContent += "\n" + msg; }
+document.getElementById("loginBtn").onclick = function(){
+  const url = "https://www.tiktok.com/v2/auth/authorize/?client_key=" + encodeURIComponent(CLIENT_KEY)
+    + "&scope=" + encodeURIComponent(SCOPES)
+    + "&response_type=code"
+    + "&redirect_uri=" + encodeURIComponent(REDIRECT_URI)
+    + "&state=entertainy-sandbox-demo";
+  window.location.href = url;
+};
+const params = new URLSearchParams(window.location.search);
+const code = params.get("code");
+const err = params.get("error");
+if (code) {
+  document.getElementById("loginStatus").textContent = "TikTok authorization code received. Login Kit step complete. Exchange this code for an access token in the Sandbox, then paste that token above to test the upload.";
+  log("Authorization code received (Login Kit complete).");
+} else if (err) {
+  document.getElementById("loginStatus").textContent = "TikTok login error: " + err;
+  log("Login error: " + err);
+}
+let chosenFile = null;
+document.getElementById("videoFile").onchange = function(e){
+  chosenFile = e.target.files[0];
+  if (chosenFile) {
+    document.getElementById("fileInfo").textContent = "Selected: " + chosenFile.name + " (" + Math.round(chosenFile.size/1024/1024*100)/100 + " MB, " + chosenFile.type + ")";
+    log("Video selected: " + chosenFile.name);
+  }
+};
+document.getElementById("uploadBtn").onclick = async function(){
+  const token = document.getElementById("tokenInput").value.trim();
+  const out = document.getElementById("uploadStatus");
+  if (!chosenFile) { out.textContent = "Please choose a video file first."; return; }
+  if (!token) { out.textContent = "Please paste a Sandbox access token first. Without a token, the Content Posting API cannot be called — this page does not fake an upload."; return; }
+  out.textContent = "Starting inbox upload...";
+  try {
+    const initRes = await fetch("https://open.tiktokapis.com/v2/post/publish/inbox/video/init/", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({ post_info: { title: chosenFile.name, privacy_level: "SELF_ONLY" }, source_info: { source: "FILE_UPLOAD", video_size: chosenFile.size, chunk_size: chosenFile.size, total_chunk_count: 1 } })
+    });
+    const initData = await initRes.json();
+    log("Init response: " + JSON.stringify(initData).slice(0, 500));
+    if (!initData.data || !initData.data.upload_url) { out.textContent = "Upload init failed. See Status for the API response."; return; }
+    const putRes = await fetch(initData.data.upload_url, { method: "PUT", headers: { "Content-Range": "bytes 0-" + (chosenFile.size-1) + "/" + chosenFile.size, "Content-Type": "video/mp4" }, body: chosenFile });
+    log("File PUT status: " + putRes.status);
+    out.textContent = "File uploaded to TikTok. Publish ID: " + initData.data.publish_id + ". Check your TikTok inbox for the draft, then review and post it yourself in the TikTok app.";
+  } catch (e) {
+    out.textContent = "Upload call failed in the browser: " + e.message + ". This can happen if the browser blocks the API call — the login step above still demonstrates Login Kit, and the API response above shows what happened.";
+    log("Upload error: " + e.message);
+  }
+};
+</script>
+</body>
+</html>
