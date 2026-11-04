@@ -48,7 +48,8 @@ document.getElementById("loginBtn").onclick = function(){
     + "&scope=" + encodeURIComponent(SCOPES)
     + "&response_type=code"
     + "&redirect_uri=" + encodeURIComponent(REDIRECT_URI)
-    + "&state=entertainy-sandbox-demo";
+    + "&state=entertainy-sandbox-demo"
+    + "&disable_auto_auth=1";
   window.location.href = url;
 };
 const params = new URLSearchParams(window.location.search);
